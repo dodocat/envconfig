@@ -3,12 +3,15 @@
 [![Build Status](https://travis-ci.org/kelseyhightower/envconfig.svg)](https://travis-ci.org/kelseyhightower/envconfig)
 
 ```Go
-import "github.com/kelseyhightower/envconfig"
+import "github.com/dodocat/envconfig"
 ```
 
-## Documentation
+add library with dep
 
-See [godoc](http://godoc.org/github.com/kelseyhightower/envconfig)
+``` bash
+dep ensure --add "github.com/dodocat/envconfig"
+
+```
 
 ## Usage
 
@@ -34,7 +37,7 @@ import (
     "log"
     "time"
 
-    "github.com/kelseyhightower/envconfig"
+    "github.com/dodocat/envconfig"
 )
 
 type Specification struct {
@@ -50,6 +53,8 @@ type Specification struct {
 func main() {
     var s Specification
     err := envconfig.Process("myapp", &s)
+    ec := &envconfig.ENVConfig{Prefix:"myapp"}
+    err := ec.Process(&s)
     if err != nil {
         log.Fatal(err.Error())
     }
@@ -106,10 +111,9 @@ type Specification struct {
 }
 ```
 
-Envconfig has automatic support for CamelCased struct elements when the
-`split_words:"true"` tag is supplied. Without this tag, `AutoSplitVar` above
-would look for an environment variable called `MYAPP_AUTOSPLITVAR`. With the
-setting applied it will look for `MYAPP_AUTO_SPLIT_VAR`. Note that numbers
+Envconfig has automatic support for CamelCased struct elements unless the
+`no_split_words=true` parameter is supplied. With `no_split_words=true`, `AutoSplitVar` above
+would look for an environment variable called `MYAPP_AUTOSPLITVAR`.otherwise it will look for `MYAPP_AUTO_SPLIT_VAR`. Note that numbers
 will get globbed into the previous word. If the setting does not do the
 right thing, you may use a manual override.
 
