@@ -57,8 +57,12 @@ type varInfo struct {
 	Tags  reflect.StructTag
 }
 
-// GatherInfo gathers information about the specified struct
-func gatherInfo(prefix string, spec interface{}) ([]varInfo, error) {
+type ENVConfig struct {
+	Prefix      string
+	NoSplitWord bool
+}
+
+func (ec *ENVConfig) gatherInfo(spec interface{}) ([]varInfo, error) {
 	s := reflect.ValueOf(spec)
 
 	if s.Kind() != reflect.Ptr {
@@ -103,14 +107,21 @@ func gatherInfo(prefix string, spec interface{}) ([]varInfo, error) {
 		info.Key = info.Name
 
 		// Best effort to un-pick camel casing as separate words
-		if isTrue(ftype.Tag.Get("split_words")) {
-			info.Key = ToUnderScore(info.Key)
+
+		if len(ftype.Tag.Get("split_words")) > 0 {
+			if isTrue(ftype.Tag.Get("split_words")) {
+				info.Key = ToUnderScore(info.Key)
+			}
+		} else {
+			if !ec.NoSplitWord {
+				info.Key = ToUnderScore(info.Key)
+			}
 		}
 		if info.Alt != "" {
 			info.Key = info.Alt
 		}
-		if prefix != "" {
-			info.Key = fmt.Sprintf("%s_%s", prefix, info.Key)
+		if ec.Prefix != "" {
+			info.Key = fmt.Sprintf("%s_%s", ec.Prefix, info.Key)
 		}
 		info.Key = strings.ToUpper(info.Key)
 		infos = append(infos, info)
@@ -118,7 +129,7 @@ func gatherInfo(prefix string, spec interface{}) ([]varInfo, error) {
 		if f.Kind() == reflect.Struct {
 			// honor Decode if present
 			if decoderFrom(f) == nil && setterFrom(f) == nil && textUnmarshaler(f) == nil && binaryUnmarshaler(f) == nil {
-				innerPrefix := prefix
+				innerPrefix := ec.Prefix
 				if !ftype.Anonymous {
 					innerPrefix = info.Key
 				}
@@ -137,43 +148,10 @@ func gatherInfo(prefix string, spec interface{}) ([]varInfo, error) {
 	return infos, nil
 }
 
-// CheckDisallowed checks that no environment variables with the prefix are set
-// that we don't know how or want to parse. This is likely only meaningful with
-// a non-empty prefix.
-func CheckDisallowed(prefix string, spec interface{}) error {
-	infos, err := gatherInfo(prefix, spec)
-	if err != nil {
-		return err
-	}
-
-	vars := make(map[string]struct{})
-	for _, info := range infos {
-		vars[info.Key] = struct{}{}
-	}
-
-	if prefix != "" {
-		prefix = strings.ToUpper(prefix) + "_"
-	}
-
-	for _, env := range os.Environ() {
-		if !strings.HasPrefix(env, prefix) {
-			continue
-		}
-		v := strings.SplitN(env, "=", 2)[0]
-		if _, found := vars[v]; !found {
-			return fmt.Errorf("unknown environment variable %s", v)
-		}
-	}
-
-	return nil
-}
-
-// Process populates the specified struct based on environment variables
-func Process(prefix string, spec interface{}) error {
-	infos, err := gatherInfo(prefix, spec)
+func (ec *ENVConfig) Process(spec interface{}) error {
+	infos, err := ec.gatherInfo(spec)
 
 	for _, info := range infos {
-
 		// `os.Getenv` cannot differentiate between an explicitly set empty value
 		// and an unset value. `os.LookupEnv` is preferred to `syscall.Getenv`,
 		// but it is only available in go1.5 or newer. We're using Go build tags
@@ -209,6 +187,51 @@ func Process(prefix string, spec interface{}) error {
 	}
 
 	return err
+}
+
+func (ec *ENVConfig) CheckDisallowed(spec interface{}) error {
+	infos, err := ec.gatherInfo(spec)
+	if err != nil {
+		return err
+	}
+
+	vars := make(map[string]struct{})
+	for _, info := range infos {
+		vars[info.Key] = struct{}{}
+	}
+
+	if ec.Prefix != "" {
+		ec.Prefix = strings.ToUpper(ec.Prefix) + "_"
+	}
+
+	for _, env := range os.Environ() {
+		if !strings.HasPrefix(env, ec.Prefix) {
+			continue
+		}
+		v := strings.SplitN(env, "=", 2)[0]
+		if _, found := vars[v]; !found {
+			return fmt.Errorf("unknown environment variable %s", v)
+		}
+	}
+
+	return nil
+}
+
+// GatherInfo gathers information about the specified struct
+func gatherInfo(prefix string, spec interface{}) ([]varInfo, error) {
+	return (&ENVConfig{Prefix: prefix, NoSplitWord: true}).gatherInfo(spec)
+}
+
+// CheckDisallowed checks that no environment variables with the prefix are set
+// that we don't know how or want to parse. This is likely only meaningful with
+// a non-empty prefix.
+func CheckDisallowed(prefix string, spec interface{}) error {
+	return (&ENVConfig{Prefix: prefix, NoSplitWord: true}).CheckDisallowed(spec)
+}
+
+// Process populates the specified struct based on environment variables
+func Process(prefix string, spec interface{}) error {
+	return (&ENVConfig{Prefix: prefix, NoSplitWord: true}).Process(spec)
 }
 
 // MustProcess is the same as Process but panics if an error occurs
