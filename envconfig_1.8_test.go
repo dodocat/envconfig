@@ -3,15 +3,15 @@
 package envconfig
 
 import (
-	"os"
-	"net/url"
-	"testing"
 	"errors"
+	"net/url"
+	"os"
+	"testing"
 )
 
 type SpecWithURL struct {
-	UrlValue     url.URL
-	UrlPointer   *url.URL
+	UrlValue   url.URL
+	UrlPointer *url.URL
 }
 
 func TestParseURL(t *testing.T) {
@@ -64,5 +64,18 @@ func TestParseURLError(t *testing.T) {
 
 	if v.Err.Error() != expectedUnerlyingError.Error() {
 		t.Errorf("expected %q, got %q", expectedUnerlyingError, v.Err)
+	}
+}
+
+func TestToUnderScore(t *testing.T) {
+	assert(ToUnderScore("CustomID"), "custom_id", t)
+	assert(ToUnderScore("ProductAPI"), "product_api", t)
+	assert(ToUnderScore("UserName"), "user_name", t)
+	assert(ToUnderScore("TLee"), "t_lee", t)
+}
+
+func assert(got string, expected string, t *testing.T) {
+	if got != expected {
+		t.Errorf("expected %s, got %s", expected, got)
 	}
 }
